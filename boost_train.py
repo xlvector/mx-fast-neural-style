@@ -6,8 +6,7 @@ import numpy as np
 
 import basic
 import data_processing
-import gen_v3
-import gen_v4
+import gen
 
 # params
 vgg_params = mx.nd.load("./model/vgg19.params")
@@ -39,19 +38,16 @@ for i in range(len(style_array)):
 grad_array.append(mx.nd.ones((1,), ctx) * (float(content_weight)))
 
 # generator
-gens = [gen_v4.get_module("g0", dshape, ctx),
-        gen_v3.get_module("g1", dshape, ctx),
-        gen_v3.get_module("g2", dshape, ctx),
-        gen_v4.get_module("g3", dshape, ctx)]
-for gen in gens:
-    gen.init_optimizer(
-        optimizer='sgd',
-        optimizer_params={
-            'learning_rate': 1e-4,
-            'momentum' : 0.9,
-            'wd': 5e-3,
-            'clip_gradient' : 5.0
-        })
+arch = 'c32-9-1,c64-3-2,c128-3-2,r128-3,r128-3,r128-3,r128-3,r128-3,d64-3-2,d32-3-2,c3-9-1'
+gen = gen.get_module("g", arch, dshape, ctx)
+gen.init_optimizer(
+    optimizer='sgd',
+    optimizer_params={
+        'learning_rate': 1e-4,
+        'momentum' : 0.9,
+        'wd': 5e-3,
+        'clip_gradient' : 5.0
+    })
 
 
 # tv-loss
