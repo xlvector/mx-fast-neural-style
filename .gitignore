@@ -1,3 +1,13 @@
+*~
+*.zip
+*.out
+input
+data
+model
+output
+flickr
+*.jpg
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
