@@ -6,7 +6,7 @@ import numpy as np
 
 import basic
 import data_processing
-import gen
+import gen_v3, gen_v4
 import logging
 
 # params
@@ -43,17 +43,22 @@ grad_array.append(mx.nd.ones((1,), ctx) * (float(content_weight)))
 
 # generator
 logging.info('init generator')
-arch = 'c9s1-32,d64,d128,R128,R128,R128,R128,R128,u64,u32,c9s1-3'
-gen = gen.get_module('g', arch, dshape, ctx)
+# generator
+gens = [gen_v4.get_module("g0", dshape, ctx),
+        gen_v3.get_module("g1", dshape, ctx),
+        gen_v3.get_module("g2", dshape, ctx),
+        gen_v4.get_module("g3", dshape, ctx)]
+for gen in gens:
+    gen.init_optimizer(
+        optimizer='sgd',
+        optimizer_params={
+            'learning_rate': 1e-4,
+            'momentum' : 0.9,
+            'wd': 5e-3,
+            'clip_gradient' : 5.0
+        })
 logging.info('generator module ok')
-gen.init_optimizer(
-    optimizer='sgd',
-    optimizer_params={
-        'learning_rate': 1e-3,
-        'momentum' : 0.9,
-        'wd': 5e-3,
-        'clip_gradient' : 5.0
-    })
+
 
 
 # tv-loss: total variation regularization
@@ -115,29 +120,33 @@ for i in range(start_epoch, end_epoch):
         # set target content
         loss.set_params({"target_content" : content_array}, {}, True, True)
         # gen_forward
-        gen.forward(mx.io.DataBatch([data_array[-1]], [0]), is_train=True)
-        data_array.append(gen.get_outputs()[0].copyto(mx.cpu()))
-        # loss forward
-        loss.forward(mx.io.DataBatch([data_array[-1]], [0]), is_train=True)
-        loss.backward(grad_array)
-        grad = loss.get_input_grads()[0]
-        loss_grad_array.append(grad.copyto(mx.cpu()))
+        for k in range(len(gens)):
+            gens[k].forward(mx.io.DataBatch([data_array[-1]], [0]), is_train=True)
+            data_array.append(gens[k].get_outputs()[0].copyto(mx.cpu()))
+            # loss forward
+            loss.forward(mx.io.DataBatch([data_array[-1]], [0]), is_train=True)
+            loss.backward(grad_array)
+            grad = loss.get_input_grads()[0]
+            loss_grad_array.append(grad.copyto(mx.cpu()))
         
         grad = mx.nd.zeros(data.shape)
-        tv_grad_executor = get_tv_grad_executor(gen.get_outputs()[0],
-                                                ctx, tv_weight)
-        tv_grad_executor.forward()
+        for k in range(len(gens) - 1, -1, -1):
+            tv_grad_executor = get_tv_grad_executor(gens[k].get_outputs()[0],
+                    ctx, tv_weight)
+            tv_grad_executor.forward()
 
-        grad[:] += loss_grad_array[0] + tv_grad_executor.outputs[0].copyto(mx.cpu())
-        gnorm = mx.nd.norm(grad).asscalar()
-        if gnorm > clip_norm:
-            grad[:] *= clip_norm / gnorm
+            grad[:] += loss_grad_array[k] + tv_grad_executor.outputs[0].copyto(mx.cpu())
+            gnorm = mx.nd.norm(grad).asscalar()
+            if gnorm > clip_norm:
+                grad[:] *= clip_norm / gnorm
 
-        gen.backward([grad])
-        gen.update()
+            gens[k].backward([grad])
+            gens[k].update()
         if idx % 20 == 0:
             logging.info("Epoch %d: Image %d" % (i, idx))
-            logging.info("Data Norm :%.5f" %\
-                         (mx.nd.norm(gen.get_input_grads()[0]).asscalar() / np.prod(dshape)))
+            for k in range(len(gens)):
+                logging.info("Data Norm :%.5f" %\
+                        (mx.nd.norm(gens[k].get_input_grads()[0]).asscalar() / np.prod(dshape)))
         if idx % 1000 == 0:
-            gen.save_params("./model/%d/%s_%04d-%07d.params" % (0, model_prefix, i, idx))
+            for k in range(len(gens)):
+                gens[k].save_params("./model/%d/%s_%04d-%07d.params" % (k, model_prefix, i, idx))
