@@ -61,13 +61,15 @@ def get_generator(prefix, im_hw):
     out = mx.sym.Convolution(conv6_1, num_filter=3, kernel=(3, 3), pad=(1, 1), no_bias=True)
     out = mx.sym.BatchNorm(out, fix_gamma=False)
     out = mx.sym.Activation(data=out, act_type="tanh")
-    raw_out = (out * 128) + 128
-    norm = mx.sym.SliceChannel(raw_out, num_outputs=3)
-    r_ch = norm[0] - 123.68
-    g_ch = norm[1] - 116.779
-    b_ch = norm[2] - 103.939
-    norm_out = 0.4 * mx.sym.Concat(*[r_ch, g_ch, b_ch]) + 0.6 * data
-    return norm_out
+    out = out * 128
+    return out * 0.5 + data * 0.5
+#    raw_out = (out * 128) + 128
+#    norm = mx.sym.SliceChannel(raw_out, num_outputs=3)
+#    r_ch = norm[0] - 123.68
+#    g_ch = norm[1] - 116.779
+#    b_ch = norm[2] - 103.939
+#    norm_out = 0.4 * mx.sym.Concat(*[r_ch, g_ch, b_ch]) + 0.6 * data
+#    return norm_out
 
 def get_module(prefix, dshape, ctx, is_train=True):
     sym = get_generator(prefix, dshape[-2:])

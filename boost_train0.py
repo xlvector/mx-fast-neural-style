@@ -21,7 +21,7 @@ ctx = mx.gpu(0)
 
 # init style
 logging.info("init style")
-style_np = data_processing.PreprocessStyleImage("./input/starry_night.jpg", shape=dshape)
+style_np = data_processing.PreprocessStyleImage("./input/wave.jpg", shape=dshape)
 style_mod = basic.get_style_module("style", dshape, ctx, vgg_params)
 style_mod.forward(mx.io.DataBatch([mx.nd.array(style_np)], [0]), is_train=False)
 style_array = [arr.copyto(mx.cpu()) for arr in style_mod.get_outputs()]
@@ -137,6 +137,7 @@ for i in range(start_epoch, end_epoch):
 
             grad[:] += loss_grad_array[k] + tv_grad_executor.outputs[0].copyto(mx.cpu())
             gnorm = mx.nd.norm(grad).asscalar()
+            print gnorm, clip_norm
             if gnorm > clip_norm:
                 grad[:] *= clip_norm / gnorm
 

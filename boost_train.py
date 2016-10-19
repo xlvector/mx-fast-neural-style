@@ -6,14 +6,14 @@ import numpy as np
 
 import basic
 import data_processing
-import gen
+import gen, gen_v4
 import logging
 
 # params
 vgg_params = mx.nd.load("./model/vgg19.params")
-style_weight = 1.2
+style_weight = 5
 
-content_weight = 10
+content_weight = 1
 dshape = (1, 3, 256, 256)
 clip_norm = 0.05 * np.prod(dshape)
 model_prefix = "v3"
@@ -21,7 +21,7 @@ ctx = mx.gpu(0)
 
 # init style
 logging.info("init style")
-style_np = data_processing.PreprocessStyleImage("./input/starry_night.jpg", shape=dshape)
+style_np = data_processing.PreprocessStyleImage("./input/wave.jpg", shape=dshape)
 style_mod = basic.get_style_module("style", dshape, ctx, vgg_params)
 style_mod.forward(mx.io.DataBatch([mx.nd.array(style_np)], [0]), is_train=False)
 style_array = [arr.copyto(mx.cpu()) for arr in style_mod.get_outputs()]
@@ -34,22 +34,27 @@ content_mod = basic.get_content_module("content", dshape, ctx, vgg_params)
 # loss
 logging.info("init loss")
 loss, gscale = basic.get_loss_module("loss", dshape, ctx, vgg_params)
+print 'gscale: ', gscale
 extra_args = {"target_gram_%d" % i : style_array[i] for i in range(len(style_array))}
 loss.set_params(extra_args, {}, True, True)
 grad_array = []
 for i in range(len(style_array)):
+    print style_array[i].asnumpy()
+    print "gscale: ", gscale[i], float(style_weight) / gscale[i]
     grad_array.append(mx.nd.ones((1,), ctx) * (float(style_weight) / gscale[i]))
 grad_array.append(mx.nd.ones((1,), ctx) * (float(content_weight)))
 
 # generator
 logging.info('init generator')
 arch = 'c9s1-32,d64,d128,R128,R128,R128,R128,R128,u64,u32,c9s1-3'
+#arch = 'c5s1-48,c5s1-32,c3s1-64,c5s1-32,c5s1-48,c5s1-32,c3s1-3'
 gen = gen.get_module('g', arch, dshape, ctx)
+#gen = gen_v4.get_module("g", dshape, ctx)
 logging.info('generator module ok')
 gen.init_optimizer(
     optimizer='sgd',
     optimizer_params={
-        'learning_rate': 1e-3,
+        'learning_rate': 1e-4,
         'momentum' : 0.9,
         'wd': 5e-3,
         'clip_gradient' : 5.0
@@ -130,8 +135,9 @@ for i in range(start_epoch, end_epoch):
 
         grad[:] += loss_grad_array[0] + tv_grad_executor.outputs[0].copyto(mx.cpu())
         gnorm = mx.nd.norm(grad).asscalar()
-        if gnorm > clip_norm:
-            grad[:] *= clip_norm / gnorm
+        print gnorm, clip_norm
+        #if gnorm > clip_norm:
+        #    grad[:] *= clip_norm / gnorm
 
         gen.backward([grad])
         gen.update()

@@ -19,14 +19,14 @@ class PretrainedInit(mx.init.Initializer):
         if key in self.arg_names:
             if self.verbose:
                 print("Init %s" % name)
-            self.arg_params["arg:" + key].copyto(arr)
-        elif key in self.aux_params:
-            if self.verbose:
-                print("Init %s" % name)
-            self.aux_params["aux:" + key].copyto(arr)
-        else:
-            print("Unknown params: %s, init with 0" % name)
-            arr[:] = 0.
+                self.arg_params["arg:" + key].copyto(arr)
+            elif key in self.aux_params:
+                if self.verbose:
+                    print("Init %s" % name)
+                    self.aux_params["aux:" + key].copyto(arr)
+                else:
+                    print("Unknown params: %s, init with 0" % name)
+                    arr[:] = 0.
 
 
 def style_gram_symbol(input_shape, style):
@@ -38,6 +38,7 @@ def style_gram_symbol(input_shape, style):
         x = mx.sym.Reshape(style[i], shape=(int(shape[1]), int(np.prod(shape[2:]))))
         # use fully connected to quickly do dot(x, x^T)
         gram = mx.sym.FullyConnected(x, x, no_bias=True, num_hidden=shape[1])
+        #gram = gram / np.prod(shape[1:]) * shape[1]
         gram_list.append(gram)
         grad_scale.append(np.prod(shape[1:]) * shape[1])
     return mx.sym.Group(gram_list), grad_scale

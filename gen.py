@@ -9,7 +9,7 @@ def get_residual(data, nfilter):
                              stride = (1, 1),
                              pad = (1, 1))
     sym = mx.sym.BatchNorm(sym, fix_gamma = False)
-    sym = mx.sym.LeakyReLU(sym)
+    sym = mx.sym.LeakyReLU(sym, act_type="leaky")
     sym = mx.sym.Convolution(data, num_filter = nfilter,
                              kernel = (3, 3),
                              stride = (1, 1),
@@ -20,7 +20,8 @@ def get_residual(data, nfilter):
 # c9s1-32,d64,d128,R128,R128,R128,R128,R128,u64,u32,c9s1-3
 def get_generator(prefix, arch):
     blocks = arch.split(',')
-    sym = mx.sym.Variable('%s_data' % prefix)
+    data = mx.sym.Variable('%s_data' % prefix)
+    sym = data
     k = 0
     for block in blocks:
         k += 1
@@ -54,9 +55,9 @@ def get_generator(prefix, arch):
             return None
         if k < len(blocks):
             sym = mx.sym.BatchNorm(sym, fix_gamma = False)
-            sym = mx.sym.LeakyReLU(sym)
+            sym = mx.sym.LeakyReLU(sym, act_type="leaky")
     sym = mx.sym.Activation(sym, act_type = "tanh")
-    sym *= 150
+    sym *= 127
     return sym
 
 def get_module(prefix, arch, dshape, ctx, is_train = True):
